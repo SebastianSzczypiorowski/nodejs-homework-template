@@ -7,6 +7,8 @@ connectDB();
 app.use(express.json());
 
 const contactsRouter = require("./routes/api/contacts");
+const usersRouter = require("./routes/api/user");
+app.use("/api/users", usersRouter);
 app.use("/api/contacts", contactsRouter);
 
 app.use((err, req, res, next) => {

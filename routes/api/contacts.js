@@ -7,6 +7,7 @@ const {
   updateContact,
   updateContactStatus,
 } = require("../../models/contacts");
+const authenticateToken = require("../../middleware/auth");
 
 const joi = require("joi");
 const router = express.Router();
@@ -21,7 +22,7 @@ const contactModel = joi.object({
   favorite: joi.boolean().required(),
 });
 
-router.get("/", async (req, res, next) => {
+router.get("/", authenticateToken, async (req, res, next) => {
   try {
     const contacts = await listContacts();
     res.json({
@@ -34,7 +35,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.get("/:contactId", async (req, res, next) => {
+router.get("/:contactId", authenticateToken, async (req, res, next) => {
   try {
     const id = req.params.contactId;
     const contact = await getContactById(id);
@@ -52,7 +53,7 @@ router.get("/:contactId", async (req, res, next) => {
   }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", authenticateToken, async (req, res, next) => {
   try {
     if (!contactModel.validate(req.body)) {
       res.status(400).json({ message: "Missing required fields" });
@@ -75,7 +76,7 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-router.delete("/:contactId", async (req, res, next) => {
+router.delete("/:contactId", authenticateToken, async (req, res, next) => {
   try {
     const id = req.params.contactId;
     const removedContact = await removeContact(id);
@@ -93,30 +94,34 @@ router.delete("/:contactId", async (req, res, next) => {
   }
 });
 
-router.patch("/:contactId/favorite", async (req, res, next) => {
-  try {
-    const contactId = req.params.contactId;
-    const { favorite } = req.body;
-    if (favorite === undefined) {
-      res.status(400).json({ message: "Missing field 'favorite'" });
-      return;
+router.patch(
+  "/:contactId/favorite",
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      const contactId = req.params.contactId;
+      const { favorite } = req.body;
+      if (favorite === undefined) {
+        res.status(400).json({ message: "Missing field 'favorite'" });
+        return;
+      }
+      const updatedContact = await updateContactStatus(contactId, favorite);
+      if (updatedContact) {
+        res.json({
+          status: "success",
+          code: 200,
+          contact: updatedContact,
+        });
+      } else {
+        res.status(404).json({ message: "Contact not found" });
+      }
+    } catch (error) {
+      next(error);
     }
-    const updatedContact = await updateContactStatus(contactId, favorite);
-    if (updatedContact) {
-      res.json({
-        status: "success",
-        code: 200,
-        contact: updatedContact,
-      });
-    } else {
-      res.status(404).json({ message: "Contact not found" });
-    }
-  } catch (error) {
-    next(error);
   }
-});
+);
 
-router.put("/:contactId", async (req, res, next) => {
+router.put("/:contactId", authenticateToken, async (req, res, next) => {
   try {
     const contactId = req.params.contactId;
     const body = req.body;
