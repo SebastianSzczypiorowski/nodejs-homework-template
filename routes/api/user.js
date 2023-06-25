@@ -1,9 +1,9 @@
 const express = require("express");
-
 const User = require("./../../models/user");
 const bcrypt = require("bcryptjs");
 const authenticateToken = require("../../middleware/auth");
 const generateToken = require("../../Utils/token");
+const gravatar = require("gravatar");
 
 const router = express.Router();
 const Joi = require("joi");
@@ -69,9 +69,13 @@ router.post("/signup", async (req, res) => {
 
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(req.body.password, salt);
+
+  const avatarURL = gravatar.url(req.body.email, { s: "250", d: "identicon" });
+
   const newUser = new User({
     email: req.body.email,
     password: hashedPassword,
+    avatarURL: avatarURL,
   });
 
   try {

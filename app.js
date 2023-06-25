@@ -4,12 +4,16 @@ const connectDB = require("./db");
 
 connectDB();
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.static("public"));
 
 const contactsRouter = require("./routes/api/contacts");
 const usersRouter = require("./routes/api/user");
+const avatarsRouter = require("./routes/api/avatars");
+
 app.use("/api/users", usersRouter);
 app.use("/api/contacts", contactsRouter);
+app.use("/api/avatars", avatarsRouter);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
