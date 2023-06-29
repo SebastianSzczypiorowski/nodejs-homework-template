@@ -3,10 +3,23 @@ const User = require("./../../models/user");
 const bcrypt = require("bcryptjs");
 const authenticateToken = require("../../middleware/auth");
 const generateToken = require("../../Utils/token");
+const { v4: uuidv4 } = require("uuid");
+const nodemailer = require("nodemailer");
 const gravatar = require("gravatar");
+require("dotenv").config();
 
 const router = express.Router();
 const Joi = require("joi");
+
+const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: "szczypiorowskis@gmail.com",
+    password: EMAIL_PASSWORD,
+  },
+});
 
 router.post("/login", async (req, res) => {
   const { error } = validateRegistration(req.body);
@@ -70,21 +83,38 @@ router.post("/signup", async (req, res) => {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(req.body.password, salt);
 
+  const verificationToken = uuidv4();
+
   const avatarURL = gravatar.url(req.body.email, { s: "250", d: "identicon" });
 
   const newUser = new User({
     email: req.body.email,
     password: hashedPassword,
     avatarURL: avatarURL,
+    verificationToken: verificationToken,
   });
 
   try {
     const savedUser = await newUser.save();
-    res.status(201).json({
-      user: {
-        email: savedUser.email,
-        subscription: savedUser.subscription,
-      },
+
+    const mailOptions = {
+      from: "szczypiorowskis@gmail.com",
+      to: savedUser.email,
+      subject: "Weryfikacja e-maila",
+      text: `Aby zweryfikować swój e-mail, kliknij na ten odnośnik: /users/verify/${verificationToken}`,
+    };
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.log("Error sending verification email:", error);
+        return res.status(500).json({ error: "Registration failed" });
+      }
+      console.log("Verification email sent:", info.response);
+      res.status(201).json({
+        user: {
+          email: savedUser.email,
+          subscription: savedUser.subscription,
+        },
+      });
     });
   } catch (error) {
     res.status(500).json({ error: "Registration failed" });
@@ -106,6 +136,66 @@ router.get("/current", authenticateToken, (req, res) => {
     email: req.user.email,
     subscription: req.user.subscription,
   });
+});
+
+router.get("/verify/:verificationToken", async (req, res) => {
+  const { verificationToken } = req.params;
+
+  try {
+    const user = await User.findOne({ verificationToken });
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+    }
+
+    user.verificationToken = null;
+    user.verify = true;
+    await user.save();
+
+    return res.status(200).json({ message: "Verification succesfull!" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.post("/verify", async (req, res) => {
+  const schema = Joi.object({
+    email: Joi.string().email().required(),
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    res.status(400).json({ message: error.details[0].message });
+  }
+  const { email } = req.body;
+  try {
+    const user = User.findOne({ email });
+
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
+    if (user.verify) {
+      return res
+        .status(400)
+        .json({ message: "Verification has already been passed" });
+    }
+
+    const verificationToken = uuidv4();
+    user.verificationToken = verificationToken;
+    user.save();
+
+    const mailOptions = {
+      from: "szczypiorowskis@gmail.com",
+      to: email,
+      subject: "Weryfikacja e-maila",
+      text: `Aby zweryfikować swój e-mail, kliknij na ten odnośnik: /users/verify/${verificationToken}`,
+    };
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error(error);
+    // Obsłuż błędy serwera
+    return res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 module.exports = router;
