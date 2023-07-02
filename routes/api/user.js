@@ -12,12 +12,14 @@ const router = express.Router();
 const Joi = require("joi");
 
 const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+const EMAIL_LOGIN = process.env.EMAIL_LOGIN;
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "sandbox.smtp.mailtrap.io",
+  port: 2525,
   auth: {
-    user: "szczypiorowskis@gmail.com",
-    password: EMAIL_PASSWORD,
+    user: EMAIL_LOGIN,
+    pass: EMAIL_PASSWORD,
   },
 });
 
@@ -98,7 +100,7 @@ router.post("/signup", async (req, res) => {
     const savedUser = await newUser.save();
 
     const mailOptions = {
-      from: "szczypiorowskis@gmail.com",
+      from: "sebastian.szczypiorowski@interia.pl",
       to: savedUser.email,
       subject: "Weryfikacja e-maila",
       text: `Aby zweryfikować swój e-mail, kliknij na ten odnośnik: /users/verify/${verificationToken}`,
@@ -140,15 +142,18 @@ router.get("/current", authenticateToken, (req, res) => {
 
 router.get("/verify/:verificationToken", async (req, res) => {
   const { verificationToken } = req.params;
+  console.log(verificationToken);
 
   try {
     const user = await User.findOne({ verificationToken });
+    console.log(user);
     if (!user) {
-      res.status(404).json({ message: "User not found" });
+      res.status(404).json({ message: "User has already been verified" });
     }
 
-    user.verificationToken = null;
+    user.verificationToken = "null";
     user.verify = true;
+
     await user.save();
 
     return res.status(200).json({ message: "Verification succesfull!" });
@@ -169,7 +174,8 @@ router.post("/verify", async (req, res) => {
   }
   const { email } = req.body;
   try {
-    const user = User.findOne({ email });
+    const user = await User.findOne({ email });
+    console.log(user);
 
     if (!user) {
       return res.status(400).json({ message: "User not found" });
@@ -182,10 +188,10 @@ router.post("/verify", async (req, res) => {
 
     const verificationToken = uuidv4();
     user.verificationToken = verificationToken;
-    user.save();
+    await user.save();
 
     const mailOptions = {
-      from: "szczypiorowskis@gmail.com",
+      from: "sebastian.szczypiorowski@interia.pl",
       to: email,
       subject: "Weryfikacja e-maila",
       text: `Aby zweryfikować swój e-mail, kliknij na ten odnośnik: /users/verify/${verificationToken}`,
@@ -193,7 +199,6 @@ router.post("/verify", async (req, res) => {
     await transporter.sendMail(mailOptions);
   } catch (error) {
     console.error(error);
-    // Obsłuż błędy serwera
     return res.status(500).json({ message: "Internal server error" });
   }
 });
