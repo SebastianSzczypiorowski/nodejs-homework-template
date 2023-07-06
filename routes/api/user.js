@@ -103,7 +103,7 @@ router.post("/signup", async (req, res) => {
       from: "sebastian.szczypiorowski@interia.pl",
       to: savedUser.email,
       subject: "Weryfikacja e-maila",
-      text: `Aby zweryfikować swój e-mail, kliknij na ten odnośnik: /users/verify/${verificationToken}`,
+      text: `Aby zweryfikować swój e-mail, kliknij na ten odnośnik: http://localhost:3000/api/users/verify/${verificationToken}`,
     };
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
@@ -196,7 +196,14 @@ router.post("/verify", async (req, res) => {
       subject: "Weryfikacja e-maila",
       text: `Aby zweryfikować swój e-mail, kliknij na ten odnośnik: /users/verify/${verificationToken}`,
     };
-    await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.log("Error sending verification email:", error);
+        return res.status(500).json({ error: "Registration failed" });
+      }
+      console.log("Verification email sent:", info.response);
+      res.status(201).json({ message: "Verification email sent" });
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error" });
